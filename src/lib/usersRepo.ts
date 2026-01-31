@@ -1,0 +1,52 @@
+import { randomUUID } from "crypto";
+import { supabase } from "./supabase";
+
+export type User = {
+  id: string;
+  email: string;
+  passwordHash: string;
+  createdAt: string;
+};
+
+export async function findUserByEmail(email: string): Promise<User | null> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id,email,password_hash,created_at")
+    .eq("email", email.toLowerCase())
+    .single();
+
+  if (error || !data) return null;
+
+  return {
+    id: data.id,
+    email: data.email,
+    passwordHash: data.password_hash,
+    createdAt: data.created_at,
+  };
+}
+
+
+export async function createUser(input: {
+  email: string;
+  passwordHash: string;
+}): Promise<User> {
+  const user: User = {
+    id: randomUUID(),
+    email: input.email.toLowerCase(),
+    passwordHash: input.passwordHash,
+    createdAt: new Date().toISOString(),
+  };
+
+  const { error } = await supabase.from("users").insert({
+    id: user.id,
+    email: user.email,
+    password_hash: user.passwordHash,
+    created_at: user.createdAt,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return user;
+}
