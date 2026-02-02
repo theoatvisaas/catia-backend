@@ -11,9 +11,14 @@ export function hashPassword(password: string): string {
 }
 
 export function verifyPassword(password: string, stored: string): boolean {
-    const [itStr, salt, originalHash] = stored.split(":");
-    const iterations = Number(itStr);
+  const parts = stored.split(":");
+  if (parts.length !== 3) return false;
 
-    const hash = pbkdf2Sync(password, salt, iterations, KEYLEN, DIGEST).toString("hex");
-    return timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(originalHash, "hex"));
+  const [itStr, salt, originalHash] = parts;
+  const iterations = Number(itStr);
+  if (!Number.isFinite(iterations) || iterations <= 0) return false;
+
+  const hash = pbkdf2Sync(password, salt, iterations, KEYLEN, DIGEST).toString("hex");
+  return timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(originalHash, "hex"));
 }
+

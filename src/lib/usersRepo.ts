@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { supabase } from "./supabase";
+import { supabaseAdmin } from "./supabase";
 
 export type User = {
   id: string;
@@ -9,11 +9,11 @@ export type User = {
 };
 
 export async function findUserByEmail(email: string): Promise<User | null> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("users")
     .select("id,email,password_hash,created_at")
-    .eq("email", email.toLowerCase())
-    .single();
+    .eq("email", email.trim().toLowerCase())
+    .maybeSingle();
 
   if (error || !data) return null;
 
@@ -25,19 +25,18 @@ export async function findUserByEmail(email: string): Promise<User | null> {
   };
 }
 
-
 export async function createUser(input: {
   email: string;
   passwordHash: string;
 }): Promise<User> {
   const user: User = {
     id: randomUUID(),
-    email: input.email.toLowerCase(),
+    email: input.email.trim().toLowerCase(),
     passwordHash: input.passwordHash,
     createdAt: new Date().toISOString(),
   };
 
-  const { error } = await supabase.from("users").insert({
+  const { error } = await supabaseAdmin.from("users").insert({
     id: user.id,
     email: user.email,
     password_hash: user.passwordHash,
@@ -45,6 +44,7 @@ export async function createUser(input: {
   });
 
   if (error) {
+    // ideal: mapear erro de unique constraint do email aqui
     throw new Error(error.message);
   }
 

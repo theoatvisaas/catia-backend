@@ -1,24 +1,27 @@
-import type { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import { Request, Response, NextFunction } from "express";
+import { supabaseAdmin } from "../../lib/supabase";
 
-type JwtPayload = {
-    sub: string;
+export type AuthedRequest = Request & {
+    userId?: string;
+    userEmail?: string;
 };
 
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
     const auth = req.headers.authorization;
+    const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
 
-    if (!auth?.startsWith("Bearer ")) {
-        return res.status(401).json({ message: "Missing token" });
+    if (!token) {
+        return res.status(401).json({ message: "Não autenticado" });
     }
 
-    const token = auth.slice("Bearer ".length).trim();
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
 
-    try {
-        const payload = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload;
-        req.userId = payload.sub;
-        return next();
-    } catch {
-        return res.status(401).json({ message: "Invalid token" });
+    if (error || !data.user) {
+        return res.status(401).json({ message: "Token inválido" });
     }
+
+    req.userId = data.user.id;
+    req.userEmail = data.user.email ?? undefined;
+
+    return next();
 }
