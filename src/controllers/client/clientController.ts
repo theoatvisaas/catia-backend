@@ -1,7 +1,7 @@
 // src/controllers/client/clientController.ts
 import { Request, Response } from "express";
 import { z } from "zod";
-import { supabaseCustomer } from "../../lib/supabase";
+import { getAuthContext } from "../../utils/auth";
 
 const normalizeText = (v: unknown) =>
     String(v ?? "")
@@ -9,33 +9,33 @@ const normalizeText = (v: unknown) =>
         .replace(/[\u200B-\u200D\uFEFF]/g, "")
         .trim();
 
-function getBearerToken(req: Request) {
-    const auth = req.headers.authorization ?? "";
-    if (!auth.startsWith("Bearer ")) return null;
-    const token = auth.slice(7).trim();
-    return token.length > 0 ? token : null;
-}
-
 const createBodySchema = z.object({
-    name: z.string().transform((v) => normalizeText(v)).refine((v) => v.length > 0, "name obrigatório"),
+    name: z
+        .string()
+        .transform((v) => normalizeText(v))
+        .refine((v) => v.length > 0, "name obrigatório"),
     crmv: z.string().transform((v) => normalizeText(v)).nullable().optional(),
     specialty: z.string().transform((v) => normalizeText(v)).nullable().optional(),
-    /* status: z.boolean().optional(),
-    funnel_phase: z.literal("trial").optional(),
-    trial_query_remaining: z.number().int().optional(),
-    payment_customer_id: z.string().transform((v) => normalizeText(v)).nullable().optional(),
-    payment_customer_status: z.string().transform((v) => normalizeText(v)).nullable().optional(), */
 });
 
 const idParamSchema = z.object({
-    id: z.string().transform((v) => normalizeText(v)).refine((v) => v.length > 0, "id inválido"),
+    id: z
+        .string()
+        .transform((v) => normalizeText(v))
+        .refine((v) => v.length > 0, "id inválido"),
 });
 
-const updateAllowedSchema = z.object({
-    name: z.string().transform(normalizeText).refine((v) => v.length > 0, "name obrigatório").optional(),
-    crmv: z.string().transform(normalizeText).nullable().optional(),
-    specialty: z.string().transform(normalizeText).nullable().optional(),
-}).refine((v) => Object.keys(v).length > 0, { message: "Nada para atualizar" });
+const updateAllowedSchema = z
+    .object({
+        name: z
+            .string()
+            .transform(normalizeText)
+            .refine((v) => v.length > 0, "name obrigatório")
+            .optional(),
+        crmv: z.string().transform(normalizeText).nullable().optional(),
+        specialty: z.string().transform(normalizeText).nullable().optional(),
+    })
+    .refine((v) => Object.keys(v).length > 0, { message: "Nada para atualizar" });
 
 // POST /client
 export async function createClientController(req: Request, res: Response) {
@@ -44,17 +44,10 @@ export async function createClientController(req: Request, res: Response) {
         return res.status(400).json({ message: "Dados Inválidos", issues: parsed.error.issues });
     }
 
-    const token = getBearerToken(req);
-    if (!token) return res.status(401).json({ message: "Token ausente" });
+    const auth = await getAuthContext(req);
+    if (!auth.ok) return res.status(auth.status).json({ message: auth.message });
 
-    const sb = supabaseCustomer(token);
-
-    const { data: userData, error: userError } = await sb.auth.getUser();
-    if (userError || !userData?.user) {
-        return res.status(401).json({ message: "Token inválido ou expirado" });
-    }
-
-    const userId = userData.user.id;
+    const { sb, userId } = auth;
 
     const { data: existing, error: existingError } = await sb
         .from("clients")
@@ -88,34 +81,12 @@ export async function createClientController(req: Request, res: Response) {
 
 // GET /client
 export async function getClientByIdController(req: Request, res: Response) {
-    const token = getBearerToken(req);
-    if (!token) return res.status(401).json({ message: "Token ausente" });
+    const auth = await getAuthContext(req);
+    if (!auth.ok) return res.status(auth.status).json({ message: auth.message });
 
-    const sb = supabaseCustomer(token);
+    const { sb, userId } = auth;
 
-    const { data: userData, error: userError } = await sb.auth.getUser();
-    if (userError || !userData?.user) {
-        return res.status(401).json({
-            message: "Token inválido ou expirado",
-            supabase: {
-                message: userError?.message,
-                status: (userError as any)?.status,
-                name: (userError as any)?.name,
-            },
-        });
-    }
-
-    const userId = userData.user.id;
-
-    console.log(userId);
-
-    const { data, error } = await sb
-        .from("clients")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-    console.log(data)
+    const { data, error } = await sb.from("clients").select("*").eq("user_id", userId).maybeSingle();
 
     if (error) {
         return res.status(500).json({
@@ -128,14 +99,12 @@ export async function getClientByIdController(req: Request, res: Response) {
         });
     }
 
-
     if (!data) {
         return res.status(404).json({ message: "Cliente não encontrado" });
     }
 
     return res.status(200).json({ client: data });
 }
-
 
 // PUT /client/:id
 export async function updateClientByIdController(req: Request, res: Response) {
@@ -149,17 +118,10 @@ export async function updateClientByIdController(req: Request, res: Response) {
         return res.status(400).json({ message: "Dados Inválidos", issues: parsedBody.error.issues });
     }
 
-    const token = getBearerToken(req);
-    if (!token) return res.status(401).json({ message: "Token ausente" });
+    const auth = await getAuthContext(req);
+    if (!auth.ok) return res.status(auth.status).json({ message: auth.message });
 
-    const sb = supabaseCustomer(token);
-
-    const { data: userData, error: userError } = await sb.auth.getUser();
-    if (userError || !userData?.user) {
-        return res.status(401).json({ message: "Token inválido ou expirado" });
-    }
-    const userId = userData.user.id;
-
+    const { sb, userId } = auth;
     const { id } = parsedParams.data;
 
     const { data, error } = await sb
@@ -185,16 +147,17 @@ export async function deleteClientByIdController(req: Request, res: Response) {
         return res.status(400).json({ message: "Parâmetros inválidos", issues: parsedParams.error.issues });
     }
 
-    const token = getBearerToken(req);
-    if (!token) return res.status(401).json({ message: "Token ausente" });
+    const auth = await getAuthContext(req);
+    if (!auth.ok) return res.status(auth.status).json({ message: auth.message });
 
-    const sb = supabaseCustomer(token);
+    const { sb, userId } = auth;
     const { id } = parsedParams.data;
 
     const { data, error } = await sb
         .from("clients")
         .delete()
         .eq("id", id)
+        .eq("user_id", userId)
         .select("id,user_id")
         .maybeSingle();
 

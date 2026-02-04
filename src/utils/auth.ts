@@ -1,0 +1,23 @@
+import { Request } from "express";
+import { supabaseCustomer } from "../lib/supabase";
+
+function getBearerToken(req: Request) {
+    const auth = req.headers.authorization ?? "";
+    if (!auth.startsWith("Bearer ")) return null;
+    const token = auth.slice(7).trim();
+    return token.length ? token : null;
+}
+
+export async function getAuthContext(req: Request) {
+    const token = getBearerToken(req);
+    if (!token) return { ok: false as const, status: 401, message: "Token ausente" };
+
+    const sb = supabaseCustomer(token);
+
+    const { data, error } = await sb.auth.getUser();
+    if (error || !data?.user) {
+        return { ok: false as const, status: 401, message: "Token inválido ou expirado" };
+    }
+
+    return { ok: true as const, sb, userId: data.user.id, user: data.user };
+}

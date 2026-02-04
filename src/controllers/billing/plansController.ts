@@ -74,9 +74,8 @@ const idParamSchema = z.object({
 export async function listPlansController(req: Request, res: Response) {
     const { data, error } = await supabaseTable
         .from("plans")
-        .select("id,title,monthly_amount,advantages,isFeatured")
+        .select("id,title,monthly_amount,advantages,isFeatured,stripe_price_id")
         .order("order", { ascending: true })
-        //.order("monthly_amount", { ascending: true });
 
     if (error) {
         return res.status(500).json({
