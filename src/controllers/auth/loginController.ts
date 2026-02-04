@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { supabaseAuth } from "../../lib/supabase";
+import { supabaseTable } from "../../lib/supabase";
 
 const bodySchema = z.object({
     email: z.string().email().transform((v) => v.trim().toLowerCase()),
@@ -15,7 +15,7 @@ export async function loginController(req: Request, res: Response) {
 
   const { email, password } = parsed.data;
 
-  const { data, error } = await supabaseAuth.auth.signInWithPassword({
+  const { data, error } = await supabaseTable.auth.signInWithPassword({
     email,
     password,
   });

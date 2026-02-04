@@ -1,14 +1,13 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import { z } from "zod";
-import { supabaseAuth, supabaseAdmin } from "../../lib/supabase";
-import type { AuthedRequest } from "../requireAuth/requireAuth";
+import { supabaseTable, supabaseAdmin } from "../../lib/supabase";
 
 const bodySchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(6),
 });
 
-export async function changePasswordController(req: AuthedRequest, res: Response) {
+export async function changePasswordController(req: Request, res: Response) {
   const parsed = bodySchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: "Dados Inválidos", issues: parsed.error.issues });
@@ -28,7 +27,7 @@ export async function changePasswordController(req: AuthedRequest, res: Response
   const { currentPassword, newPassword } = parsed.data;
   const email = userData.user.email;
 
-  const { error: reauthErr } = await supabaseAuth.auth.signInWithPassword({
+  const { error: reauthErr } = await supabaseTable.auth.signInWithPassword({
     email,
     password: currentPassword,
   });

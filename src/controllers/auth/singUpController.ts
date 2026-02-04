@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { supabaseAuth, supabaseAdmin } from "../../lib/supabase";
+import { supabaseTable, supabaseAdmin } from "../../lib/supabase";
 
 const bodySchema = z.object({
   email: z.preprocess(
@@ -17,6 +17,13 @@ const bodySchema = z.object({
 
 
 export async function signupController(req: Request, res: Response) {
+  console.log("signup hit", {
+    method: req.method,
+    url: req.originalUrl,
+    headers: req.headers,
+    body: req.body,
+  });
+
   const parsed = bodySchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: "Dados Inválidos" });
@@ -26,7 +33,7 @@ export async function signupController(req: Request, res: Response) {
 
   console.log("EMAIL RAW:", JSON.stringify(email), email.length);
 
-  const { data, error } = await supabaseAuth.auth.signUp({
+  const { data, error } = await supabaseTable.auth.signUp({
     email,
     password,
   });

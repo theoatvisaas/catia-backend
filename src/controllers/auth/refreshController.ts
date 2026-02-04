@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { supabaseAuth } from "../../lib/supabase";
+import { supabaseTable } from "../../lib/supabase";
 
 const bodySchema = z.object({
     refresh_token: z.string().min(1),
@@ -14,7 +14,7 @@ export async function refreshController(req: Request, res: Response) {
 
     const { refresh_token } = parsed.data;
 
-    const { data, error } = await supabaseAuth.auth.refreshSession({ refresh_token });
+    const { data, error } = await supabaseTable.auth.refreshSession({ refresh_token });
 
     if (error || !data.session) {
         console.log("SUPABASE refreshSession ERROR:", error);

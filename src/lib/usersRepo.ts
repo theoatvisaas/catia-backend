@@ -44,7 +44,6 @@ export async function createUser(input: {
   });
 
   if (error) {
-    // ideal: mapear erro de unique constraint do email aqui
     throw new Error(error.message);
   }
 
