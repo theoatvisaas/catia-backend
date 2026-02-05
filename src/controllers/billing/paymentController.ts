@@ -65,7 +65,7 @@ export async function createCheckoutController(req: Request, res: Response) {
 
         const auth = await getAuthContext(req);
         if (!auth.ok) return res.status(auth.status).json({ message: auth.message });
-        
+
         const { sb } = auth;
 
         const user = (auth as any).user;
@@ -122,11 +122,32 @@ export async function createCheckoutController(req: Request, res: Response) {
             { apiVersion: "2023-10-16" }
         );
 
+        // tenta PaymentIntent
+        const invoice: any = subscription.latest_invoice;
+        const piSecret = invoice?.payment_intent?.client_secret;
+
+        if (piSecret) {
+            return res.json({
+                customerId,
+                clientId,
+                subscriptionId: subscription.id,
+                paymentIntentClientSecret: piSecret,
+                ephemeralKeySecret: ephKey.secret,
+            });
+        }
+
+        // fallback: cria SetupIntent
+        const setupIntent = await stripe.setupIntents.create({
+            customer: customerId,
+            payment_method_types: ["card"],
+        });
+
+
         return res.json({
             customerId,
             clientId,
             subscriptionId: subscription.id,
-            paymentIntentClientSecret: (subscription.latest_invoice as any)?.payment_intent?.client_secret,
+            paymentIntentClientSecret: setupIntent.client_secret/* (subscription.latest_invoice as any)?.payment_intent?.client_secret */,
             ephemeralKeySecret: ephKey.secret,
         });
     } catch (err) {
