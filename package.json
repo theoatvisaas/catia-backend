@@ -1,4 +1,8 @@
 {
+  "main": "dist/server.js",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.93.3",
     "cors": "^2.8.6",
@@ -6,11 +10,13 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "stripe": "^20.3.0",
+    "cross-env": "^10.1.0",
     "zod": "^4.3.6"
   },
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only --watch src src/server.ts",
     "build": "tsc",
+    "prestart": "npm run build",
     "start": "cross-env NODE_ENV=production node dist/server.js",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write ."
@@ -20,7 +26,6 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.1.0",
-    "cross-env": "^10.1.0",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
