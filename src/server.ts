@@ -6,12 +6,16 @@ import dotenv from "dotenv";
 import { routes } from "./routes";
 import { errorHandler } from "./middlewares/errorHandler";
 import { notFound } from "./middlewares/notFound";
+import { stripeWebHooks } from "./routes/stripe.hooks.routes";
 
 dotenv.config();
 
 const app = express();
 
 app.use(cors());
+
+app.use("/stripe-webhooks", stripeWebHooks);
+
 app.use(express.json());
 
 app.get("/health", (_req, res) => {

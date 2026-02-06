@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authRoutes } from "./auth.routes";
 import { clientRoutes } from "./client.routes";
 import { plansRoutes } from "./plans.routes";
-import { paymentsRoutes } from "./payment.routes"
+import { paymentsRoutes } from "./payment.routes";
 
 export const routes = Router();
 
