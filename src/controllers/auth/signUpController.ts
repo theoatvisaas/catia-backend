@@ -51,6 +51,7 @@ export async function signupController(req: Request, res: Response) {
 
   let { error: clientError } = await supabaseAdmin.from("clients").upsert({
     user_id: data.user.id,
+    name: "", // Adicionar name do usuário vindo do Sign Up do Front
     status: true,
     funnel_phase: "trial",
   });

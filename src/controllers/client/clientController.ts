@@ -45,51 +45,6 @@ const updateAllowedSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: "Nada para atualizar" });
 
-// POST /client
-export async function createClientController(req: Request, res: Response) {
-  const parsed = createBodySchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ message: "Dados Inválidos", issues: parsed.error.issues });
-  }
-
-  const auth = await getAuthContext(req);
-  if (!auth.ok) return res.status(auth.status).json({ message: auth.message });
-
-  const { sb, userId } = auth;
-
-  const { data: existing, error: existingError } = await sb
-    .from("clients")
-    .select("id,user_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (existingError) {
-    return res
-      .status(500)
-      .json({ message: "Erro ao checar cliente existente", supabase: existingError });
-  }
-
-  if (existing) {
-    return res
-      .status(409)
-      .json({ message: "Cliente já existe para este usuário", client: existing });
-  }
-
-  const payload = {
-    name: parsed.data.name,
-    crmv: parsed.data.crmv ?? null,
-    specialty: parsed.data.specialty ?? null,
-  };
-
-  const { data, error } = await sb.from("clients").insert(payload).select("*").single();
-
-  if (error || !data) {
-    return res.status(400).json({ message: "Não foi possível criar cliente", supabase: error });
-  }
-
-  return res.status(201).json({ client: data });
-}
-
 // GET /client
 export async function getClientByIdController(req: Request, res: Response) {
   const auth = await getAuthContext(req);
@@ -142,53 +97,10 @@ export async function updateClientByIdController(req: Request, res: Response) {
     .update(parsedBody.data)
     .eq("id", id)
     .select("*")
-    .maybeSingle();
+    .maybeSingle()
+    .throwOnError();
 
-  if (error) {
-    return res.status(400).json({ message: "Não foi possível atualizar cliente", supabase: error });
-  }
   if (!data) return res.status(404).json({ message: "Cliente não encontrado" });
 
   return res.status(200).json({ client: data });
-}
-
-// DELETE /client/:id
-export async function deleteClientByIdController(req: Request, res: Response) {
-  const parsedParams = idParamSchema.safeParse(req.params);
-  if (!parsedParams.success) {
-    return res
-      .status(400)
-      .json({ message: "Parâmetros inválidos", issues: parsedParams.error.issues });
-  }
-
-  const auth = await getAuthContext(req);
-  if (!auth.ok) return res.status(auth.status).json({ message: auth.message });
-
-  const { sb, userId } = auth;
-  const { id } = parsedParams.data;
-
-  const { data, error } = await sb
-    .from("clients")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", userId)
-    .select("id,user_id")
-    .maybeSingle();
-
-  if (error) {
-    return res.status(400).json({
-      message: "Não foi possível deletar cliente",
-      supabase: {
-        message: error.message,
-        status: (error as any)?.status,
-        name: (error as any)?.name,
-      },
-    });
-  }
-
-  if (!data) {
-    return res.status(404).json({ message: "Cliente não encontrado" });
-  }
-
-  return res.status(200).json({ message: "Cliente deletado", client: data });
 }
