@@ -10,11 +10,10 @@ const bodySchema = z.object({
         .replace(/[\u200B-\u200D\uFEFF]/g, "")
         .trim()
         .toLowerCase(),
-    z.string().email()
+    z.string().email(),
   ),
   password: z.string().min(6),
 });
-
 
 export async function signupController(req: Request, res: Response) {
   console.log("signup hit", {
@@ -33,7 +32,7 @@ export async function signupController(req: Request, res: Response) {
 
   console.log("EMAIL RAW:", JSON.stringify(email), email.length);
 
-  const { data, error } = await supabaseTable.auth.signUp({
+  let { data, error } = await supabaseTable.auth.signUp({
     email,
     password,
   });
@@ -50,22 +49,25 @@ export async function signupController(req: Request, res: Response) {
     });
   }
 
-
-  await supabaseAdmin.from("profiles").upsert({
-    id: data.user.id,
-    email,
-    created_at: new Date().toISOString(),
+  let { error: clientError } = await supabaseAdmin.from("clients").upsert({
+    user_id: data.user.id,
+    status: true,
+    funnel_phase: "trial",
   });
 
-  const session = data.session;
-
-  if (!session) {
-
-    return res.status(201).json({
-      message: "Conta criada. Verifique seu e-mail para confirmar.",
-      user: { id: data.user.id, email: data.user.email },
+  if (clientError) {
+    console.log("SUPABASE clients.upsert ERROR:", clientError);
+    return res.status(400).json({
+      message: clientError?.message ?? "Não foi possível criar usuário",
+      supabase: {
+        message: clientError?.message,
+        status: (clientError as any)?.status,
+        name: (clientError as any)?.name,
+      },
     });
   }
+
+  const session = data.session!;
 
   return res.status(201).json({
     access_token: session.access_token,

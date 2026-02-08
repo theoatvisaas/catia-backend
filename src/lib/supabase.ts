@@ -10,8 +10,6 @@ function required(name: string) {
 const url = required("SUPABASE_URL");
 const anonKey = required("SUPABASE_ANON_KEY");
 
-console.log("ANON KEY: ", required("SUPABASE_ANON_KEY"));
-
 // Responsável pelo acesso às tabelas públicas (anon)
 export const supabaseTable = createClient(url, anonKey);
 
