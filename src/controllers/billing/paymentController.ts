@@ -1,140 +1,159 @@
+import stripe from "../../lib/stripe";
 import Stripe from "stripe";
 import { Request, Response } from "express";
 import { z } from "zod";
 import { getAuthContext } from "../../utils/auth";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET!, { apiVersion: "2023-10-16" as any });
+import { toISO, stripeAmountToDecimal } from "../../utils/utils";
 
 const createCheckoutBodySchema = z.object({
   stripe_price_id: z.string().min(1),
+  plan_rank_tier: z.number().min(1),
 });
 
-async function ensureStripeCustomerId(params: {
-  sb: any;
-  clientId: string;
-  email: string;
-  name: string;
-}) {
-  const { sb, clientId, email, name } = params;
-
-  const { data: client, error: clientError } = await sb
-    .from("clients")
-    .select("stripe_customer_id")
-    .eq("id", clientId)
-    .single();
-
-  if (clientError || !client) {
-    return { ok: false as const, status: 404 as const, message: "Cliente não encontrado" };
-  }
-
-  if (client.stripe_customer_id) {
-    return { ok: true as const, customerId: client.stripe_customer_id as string };
-  }
-
-  const customer = await stripe.customers.create({
-    email,
-    name,
-    metadata: { client_id: clientId },
-  });
-
-  const { error: updateError } = await sb
-    .from("clients")
-    .update({ stripe_customer_id: customer.id })
-    .eq("id", clientId);
-
-  if (updateError) {
-    return {
-      ok: false as const,
-      status: 500 as const,
-      message: "Erro ao salvar customer",
-      supabase: updateError,
-    };
-  }
-
-  return { ok: true as const, customerId: customer.id };
+// Create ephmeral key
+async function createEphKey(clientSb: any) {
+  return await stripe.ephemeralKeys.create(
+    { customer: clientSb.stripe_customer_id },
+    { apiVersion: "2023-10-16" },
+  );
 }
 
 export async function createCheckoutController(req: Request, res: Response) {
+  console.log("[CREATE CHECKOUT] - STARTED");
   try {
     const parsed = createCheckoutBodySchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Dados Inválidos", issues: parsed.error.issues });
     }
 
-    const { stripe_price_id } = parsed.data;
+    const { stripe_price_id: chosenPlanPriceId, plan_rank_tier: chosenPlanRankTier } = parsed.data;
 
     const auth = await getAuthContext(req);
-    if (!auth.ok) return res.status(auth.status).json({ message: auth.message });
-
     const { sb } = auth;
 
-    const user = (auth as any).user;
-    const userId = user?.id;
-    const email = user?.email;
-
-    console.log(userId, email);
-    if (!userId || !email) {
-      return res.status(401).json({ message: "Token inválido (usuário não encontrado)" });
-    }
-
-    const { data: client, error: clientError } = await sb
+    const { data: clientSb } = await sb
       .from("clients")
-      .select("id, name, stripe_customer_id")
-      .eq("user_id", userId)
-      .single();
+      .select("*")
+      .eq("user_id", auth.userId)
+      .single()
+      .throwOnError();
 
-    if (clientError || !client) {
-      return res.status(404).json({ message: "Cliente não encontrado para este usuário" });
-    }
+    // If the client is upgrading for the first time
+    if (!clientSb.subscription_id) {
+      console.log("[CREATE CHECKOUT] - CASE: Client is upgrading for the first time");
+      // Create stripe subscription
+      const subscription = await stripe.subscriptions.create({
+        customer: clientSb.stripe_customer_id,
+        items: [{ price: chosenPlanPriceId }],
+        payment_behavior: "default_incomplete",
+        payment_settings: {
+          payment_method_types: ["card"],
+          save_default_payment_method: "on_subscription",
+        },
+        expand: ["latest_invoice.payment_intent"],
+      });
 
-    const clientId = client.id as string;
-    const name = (client.name as string) || email;
+      // Create ephemeral key
+      const ephKey = await createEphKey(clientSb);
 
-    const ensured = await ensureStripeCustomerId({
-      sb,
-      clientId,
-      email,
-      name,
-    });
+      const invoice: any = subscription.latest_invoice;
+      const piSecret = invoice?.payment_intent?.client_secret;
 
-    if (!ensured.ok) {
-      return res.status(ensured.status).json({
-        message: ensured.message,
-        ...((ensured as any).supabase ? { supabase: (ensured as any).supabase } : {}),
+      console.log("[CREATE CHECKOUT] - FINISHED");
+      return res.json({
+        customerId: clientSb.stripe_customer_id,
+        clientId: clientSb.id,
+        subscriptionId: subscription.id,
+        paymentIntentClientSecret: piSecret,
+        ephemeralKeySecret: ephKey.secret,
       });
     }
 
-    const customerId = ensured.customerId;
+    // If the client is updating their existing subscription
+    if (clientSb.subscription_id) {
+      const { data: subscriptionSb } = await sb
+        .from("stripe_subscriptions")
+        .select("*")
+        .eq("id", clientSb.subscription_id)
+        .single()
+        .throwOnError();
 
-    const subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      items: [{ price: stripe_price_id }],
-      payment_behavior: "default_incomplete",
-      payment_settings: {
-        payment_method_types: ["card"],
-        save_default_payment_method: "on_subscription",
-      },
-      expand: ["latest_invoice.payment_intent"],
-    });
+      const currentPlanRankTier = subscriptionSb.subscription_data.plan.metadata.rank_tier;
 
-    console.log("SUBSCRIPTION: ", subscription);
+      // If the customer has an active subscription
+      if (subscriptionSb.status === "active") {
+        // If the customer is upgrading their plan
+        if (chosenPlanRankTier > currentPlanRankTier) {
+          console.log("[CREATE CHECKOUT] - CASE: Client is upgrading their existing subscription");
 
-    const ephKey = await stripe.ephemeralKeys.create(
-      { customer: customerId },
-      { apiVersion: "2023-10-16" },
-    );
+          // Updates subscription on stripe
+          const subscription = await stripe.subscriptions.update(subscriptionSb.stripe_id, {
+            items: [
+              {
+                id: subscriptionSb.subscription_item_id, // id do item antigo (si_…)
+                price: chosenPlanPriceId, // novo plano
+              },
+            ],
 
-    const invoice: any = subscription.latest_invoice;
-    const piSecret = invoice?.payment_intent?.client_secret;
+            proration_behavior: "always_invoice",
+            billing_cycle_anchor: "unchanged", // mantém ciclo
+            payment_behavior: "pending_if_incomplete",
+            expand: ["latest_invoice.payment_intent"],
+          });
 
-    return res.json({
-      customerId,
-      clientId,
-      subscriptionId: subscription.id,
-      paymentIntentClientSecret: piSecret,
-      ephemeralKeySecret: ephKey.secret,
-    });
+          // Create ephemeral key
+          const ephKey = await createEphKey(clientSb);
+
+          const invoice: any = subscription.latest_invoice;
+          const piSecret = invoice?.payment_intent?.client_secret;
+
+          console.log("[CREATE CHECKOUT] - FINISHED");
+          return res.json({
+            customerId: clientSb.stripe_customer_id,
+            clientId: clientSb.id,
+            subscriptionId: subscription.id,
+            paymentIntentClientSecret: piSecret,
+            ephemeralKeySecret: ephKey.secret,
+          });
+        }
+        // If the customer is downgrading their plan
+        if (chosenPlanRankTier < currentPlanRankTier) {
+          console.log(
+            "[CREATE CHECKOUT] - CASE: Client is downgrading their existing subscription",
+          );
+          console.log("[CREATE CHECKOUT] - FINISHED");
+        }
+
+        // If the customer selected the same plan
+        if (chosenPlanRankTier == currentPlanRankTier) {
+          console.log(
+            "[CREATE CHECKOUT] - CASE: Client tried to go to checkout to their current plan",
+          );
+          console.log("[CREATE CHECKOUT] - FINISHED");
+          return res.status(400).json({
+            message: "Esse já é o seu plano atual.",
+          });
+        }
+      }
+
+      // If the customer has a past_due or unpaid subscription
+      if (subscriptionSb.status === "unpaid" || subscriptionSb.status === "past_due") {
+        console.log("[CREATE CHECKOUT] - CASE: Client has a past_due or unpaid subscription");
+        console.log("[CREATE CHECKOUT] - FINISHED");
+
+        return res.status(400).json({
+          message:
+            "Não é possível atualizar o plano enquanto houver pagamentos pendentes. Por favor, regularize o pagamento da sua assinatura.",
+        });
+      }
+
+      // If the customer has a canceled subscription
+      if (subscriptionSb.status === "canceled") {
+        console.log("[CREATE CHECKOUT] - CASE: Client has a canceled subscription");
+        console.log("[CREATE CHECKOUT] - FINISHED");
+      }
+    }
   } catch (err) {
-    return res.status(500).json({ message: "Stripe error", error: err });
+    return res.status(500).json({ message: "Error", error: err });
   }
 }

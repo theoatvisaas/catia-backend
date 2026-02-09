@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { supabaseTable, supabaseAdmin } from "../../lib/supabase";
+import { supabaseAdmin } from "../../lib/supabase";
 
 const bodySchema = z.object({
   currentPassword: z.string().min(1),
@@ -27,7 +27,7 @@ export async function changePasswordController(req: Request, res: Response) {
   const { currentPassword, newPassword } = parsed.data;
   const email = userData.user.email;
 
-  const { error: reauthErr } = await supabaseTable.auth.signInWithPassword({
+  const { error: reauthErr } = await supabaseAdmin.auth.signInWithPassword({
     email,
     password: currentPassword,
   });

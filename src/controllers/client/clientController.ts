@@ -47,8 +47,8 @@ const updateAllowedSchema = z
 
 // GET /client
 export async function getClientByIdController(req: Request, res: Response) {
+  console.log("[GET CLIENT] - STARTED");
   const auth = await getAuthContext(req);
-  if (!auth.ok) return res.status(auth.status).json({ message: auth.message });
 
   const { sb, userId } = auth;
 
@@ -69,6 +69,7 @@ export async function getClientByIdController(req: Request, res: Response) {
     return res.status(404).json({ message: "Cliente não encontrado" });
   }
 
+  console.log("[GET CLIENT] - FINISHED");
   return res.status(200).json({ client: data });
 }
 
@@ -87,7 +88,6 @@ export async function updateClientByIdController(req: Request, res: Response) {
   }
 
   const auth = await getAuthContext(req);
-  if (!auth.ok) return res.status(auth.status).json({ message: auth.message });
 
   const { sb, userId } = auth;
   const { id } = parsedParams.data;

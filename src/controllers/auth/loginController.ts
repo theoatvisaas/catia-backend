@@ -1,10 +1,13 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { supabaseTable } from "../../lib/supabase";
+import { supabaseAdmin } from "../../lib/supabase";
 
 const bodySchema = z.object({
-    email: z.string().email().transform((v) => v.trim().toLowerCase()),
-    password: z.string().min(1),
+  email: z
+    .string()
+    .email()
+    .transform((v) => v.trim().toLowerCase()),
+  password: z.string().min(1),
 });
 
 export async function loginController(req: Request, res: Response) {
@@ -15,7 +18,7 @@ export async function loginController(req: Request, res: Response) {
 
   const { email, password } = parsed.data;
 
-  const { data, error } = await supabaseTable.auth.signInWithPassword({
+  const { data, error } = await supabaseAdmin.auth.signInWithPassword({
     email,
     password,
   });

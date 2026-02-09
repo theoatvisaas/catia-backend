@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import Stripe from "stripe";
-import { handleSubscriptionActive } from "../../handlers/stripe/handleSubscriptionActive";
-import { handleSubscribingForTheFirstTime } from "../../handlers/stripe/handleSubscribingForTheFirstTime";
+import { handleSubscribingForTheFirstTime } from "../../handlers/stripe";
 import { supabaseAdmin } from "../../lib/supabase";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET!, {
@@ -10,7 +9,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET!, {
 
 export async function stripeWebhookController(req: Request, res: Response) {
   console.log("[STRIPE WEBHOOK] - RECEIVED");
-  console.log();
+
+  // Verify stripe signature
   const sig = req.headers["stripe-signature"] as string | undefined;
 
   console.log("webhook debug", {
@@ -33,36 +33,49 @@ export async function stripeWebhookController(req: Request, res: Response) {
     return res.status(400).json({ message: "Invalid signature" });
   }
 
+  // Handles webhook events
   try {
-    const subscriptionWebhook = event.data.object as Stripe.Subscription;
+    console.log(`STRIPE WEBHOOK] - EVENT: ${event.type}`);
+
     switch (event.type) {
       case "customer.subscription.updated":
-        console.log("[STRIPE WEBHOOK] - EVENT: customer.subscription.updated");
-        const { data: subscriptionData } = await supabaseAdmin
-          .from("stripe_subscriptions")
-          .select("*")
-          .eq("stripe_id", subscriptionWebhook.id)
-          .maybeSingle()
-          .throwOnError();
+        {
+          const subscriptionWebhook = event.data.object as Stripe.Subscription;
 
-        // If the customer already has an subscription
-        if (!!subscriptionData) {
-          console.log("[STRIPE WEBHOOK] - CASE: customer already has an subscription");
-        } else {
+          const { data: subscriptionSb } = await supabaseAdmin
+            .from("stripe_subscriptions")
+            .select("*")
+            .eq("stripe_id", subscriptionWebhook.id)
+            .maybeSingle()
+            .throwOnError();
+
           // If the customer is upgrading for the first time
-          if (subscriptionWebhook.status == "active") {
+          if (!subscriptionSb && subscriptionWebhook.status == "active") {
             console.log("[STRIPE WEBHOOK] - CASE: customer is upgrading for the first time");
             await handleSubscribingForTheFirstTime(subscriptionWebhook);
           }
         }
 
-        // await handleSubscriptionActive(event.data.object as Stripe.Subscription);
-        break;
+        // If the customer is upgrading their existing subcription
 
-      // futuro
-      // case "invoice.payment_failed":
-      //   await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
-      //   break;
+        // If the customer is downgrading their existing subcription
+
+        // If the customer has requested to cancel their subscription at the end of period
+
+        // If after cancellation was requested, the customer requested to continue their subscription before the period ends
+
+        // If the subscription has been canceled (manually or due to failed payments)
+
+        // If after the subscription was canceled, the customer resqueted to reactivate their account
+
+        // If an invoice is past due
+
+        // If an invoice payment failed
+
+        // If an invoice payment succeeded
+
+        // If the subscription has become unpaid
+        break;
 
       default:
         console.log(`Evento ignorado: ${event.type}`);

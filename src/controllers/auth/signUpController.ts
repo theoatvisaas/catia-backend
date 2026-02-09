@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { supabaseTable, supabaseAdmin } from "../../lib/supabase";
+import { supabaseAdmin } from "../../lib/supabase";
+import stripe from "../../lib/stripe";
 
 const bodySchema = z.object({
   email: z.preprocess(
@@ -16,6 +17,7 @@ const bodySchema = z.object({
 });
 
 export async function signupController(req: Request, res: Response) {
+  console.log("[SIGN UP] - STARTED");
   console.log("signup hit", {
     method: req.method,
     url: req.originalUrl,
@@ -32,7 +34,7 @@ export async function signupController(req: Request, res: Response) {
 
   console.log("EMAIL RAW:", JSON.stringify(email), email.length);
 
-  let { data, error } = await supabaseTable.auth.signUp({
+  let { data, error } = await supabaseAdmin.auth.signUp({
     email,
     password,
   });
@@ -49,26 +51,37 @@ export async function signupController(req: Request, res: Response) {
     });
   }
 
-  let { error: clientError } = await supabaseAdmin.from("clients").upsert({
-    user_id: data.user.id,
-    name: "", // Adicionar name do usuário vindo do Sign Up do Front
-    status: true,
-    funnel_phase: "trial",
+  const { data: clientSb } = await supabaseAdmin
+    .from("clients")
+    .upsert({
+      user_id: data.user.id,
+      name: "", // Adicionar name do usuário vindo do Sign Up do Front
+      status: true,
+      funnel_phase: "trial",
+    })
+    .select("*")
+    .single()
+    .throwOnError();
+
+  const clientStripe = await stripe.customers.create({
+    email,
+    name: clientSb.name,
+    metadata: { client_id: clientSb.id },
   });
 
-  if (clientError) {
-    console.log("SUPABASE clients.upsert ERROR:", clientError);
-    return res.status(400).json({
-      message: clientError?.message ?? "Não foi possível criar usuário",
-      supabase: {
-        message: clientError?.message,
-        status: (clientError as any)?.status,
-        name: (clientError as any)?.name,
-      },
-    });
-  }
+  await supabaseAdmin
+    .from("clients")
+    .update({
+      stripe_customer_id: clientStripe.id,
+    })
+    .eq("id", clientSb.id)
+    .select("id")
+    .single()
+    .throwOnError();
 
   const session = data.session!;
+
+  console.log("[SIGN UP] - FINISHED");
 
   return res.status(201).json({
     access_token: session.access_token,
