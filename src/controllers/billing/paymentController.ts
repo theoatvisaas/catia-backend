@@ -86,7 +86,78 @@ export async function createCheckoutController(req: Request, res: Response) {
         if (chosenPlanRankTier > currentPlanRankTier) {
           console.log("[CREATE CHECKOUT] - CASE: Client is upgrading their existing subscription");
 
+          // 2. Calcular proration SEM modificar a subscription
+          // retrieveUpcoming simula a próxima invoice com as mudanças
+          const prorationDate = Math.floor(Date.now() / 1000);
+
+          console.log("prorationDate: ", prorationDate);
+
+          const invoicePreview = await stripe.invoices.createPreview({
+            customer: clientSb.stripe_customer_id,
+            subscription: subscriptionSb.stripe_id,
+            subscription_details: {
+              items: [
+                {
+                  id: subscriptionSb.subscription_item_id,
+                  price: chosenPlanPriceId,
+                },
+              ],
+            },
+          });
+
+          console.log("invoicePreview: ", invoicePreview);
+
+          // 3. Filtrar SOMENTE as linhas de proration
+          // O preview pode incluir a próxima invoice cheia do novo plano,
+          // mas só queremos cobrar a diferença proporcional agora
+          const prorationLines = invoicePreview.lines.data.filter((line) => line.proration);
+
+          const prorationAmount = prorationLines.reduce((sum, line) => sum + line.amount, 0);
+
+          console.log("prorationLines: ", prorationLines);
+
+          // 5. Criar PaymentIntent AVULSO com o valor da proration
+          // A subscription NÃO é modificada aqui — só muda após pagamento (via webhook)
+          const paymentIntent = await stripe.paymentIntents.create({
+            amount: prorationAmount,
+            currency: invoicePreview.currency,
+            customer: clientSb.stripe_customer_id,
+            // Metadata para o webhook saber o que fazer quando o pagamento for confirmado
+            metadata: {
+              type: "subscription_upgrade",
+              subscription_id: subscriptionSb.stripe_id,
+              subscription_item_id: subscriptionSb.subscription_item_id,
+              new_price_id: chosenPlanPriceId,
+              new_plan_rank_tier: String(chosenPlanRankTier),
+              client_id: clientSb.id,
+              proration_date: String(prorationDate),
+            },
+          });
+
+          // 6. Criar ephemeral key para o PaymentSheet
+          const ephKey = await createEphKey(clientSb);
+
+          console.log("[CREATE CHECKOUT] - FINISHED (upgrade payment required)");
+          return res.json({
+            type: "upgrade_payment_required",
+            customerId: clientSb.stripe_customer_id,
+            clientId: clientSb.id,
+            paymentIntentClientSecret: paymentIntent.client_secret,
+            ephemeralKeySecret: ephKey.secret,
+            // Dados para o frontend exibir ao usuário antes de abrir o PaymentSheet
+            upgrade: {
+              amount: prorationAmount,
+              currency: invoicePreview.currency,
+              // Detalhes das linhas de proration para mostrar na UI
+              prorationDetails: prorationLines.map((line) => ({
+                description: line.description,
+                amount: line.amount,
+              })),
+            },
+          });
+
           // Updates subscription on stripe
+          /*
           const subscription = await stripe.subscriptions.update(subscriptionSb.stripe_id, {
             items: [
               {
@@ -115,6 +186,7 @@ export async function createCheckoutController(req: Request, res: Response) {
             paymentIntentClientSecret: piSecret,
             ephemeralKeySecret: ephKey.secret,
           });
+          */
         }
         // If the customer is downgrading their plan
         if (chosenPlanRankTier < currentPlanRankTier) {
@@ -154,6 +226,7 @@ export async function createCheckoutController(req: Request, res: Response) {
       }
     }
   } catch (err) {
+    console.log("ERROR: ", err);
     return res.status(500).json({ message: "Error", error: err });
   }
 }
