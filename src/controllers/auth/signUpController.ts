@@ -4,6 +4,7 @@ import { supabaseAdmin } from "../../lib/supabase";
 import stripe from "../../lib/stripe";
 
 const bodySchema = z.object({
+  name: z.string().min(4),
   email: z.preprocess(
     (v) =>
       String(v ?? "")
@@ -30,7 +31,7 @@ export async function signupController(req: Request, res: Response) {
     return res.status(400).json({ message: "Dados Inválidos" });
   }
 
-  const { email, password } = parsed.data;
+  const { name, email, password } = parsed.data;
 
   console.log("EMAIL RAW:", JSON.stringify(email), email.length);
 
@@ -55,7 +56,7 @@ export async function signupController(req: Request, res: Response) {
     .from("clients")
     .upsert({
       user_id: data.user.id,
-      name: "", // Adicionar name do usuário vindo do Sign Up do Front
+      name: name,
       status: true,
       funnel_phase: "trial",
     })
