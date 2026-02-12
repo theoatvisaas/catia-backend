@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import Stripe from "stripe";
-import { handleSubscribingForTheFirstTime } from "../../handlers/stripe";
+import stripeWebhookHandles from "../../handlers/stripe";
 import { supabaseAdmin } from "../../lib/supabase";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET!, {
@@ -12,18 +12,10 @@ export async function stripeWebhookController(req: Request, res: Response) {
 
   // Verify stripe signature
   const sig = req.headers["stripe-signature"] as string | undefined;
-
-  console.log("webhook debug", {
-    hasSignature: !!req.headers["stripe-signature"],
-    isBuffer: Buffer.isBuffer(req.body),
-    bodyType: typeof req.body,
-  });
-
   if (!sig) {
     console.error("Stripe signature ausente");
     return res.status(400).json({ message: "Missing stripe-signature" });
   }
-
   let event: Stripe.Event;
 
   try {
@@ -35,28 +27,37 @@ export async function stripeWebhookController(req: Request, res: Response) {
 
   // Handles webhook events
   try {
-    console.log(`STRIPE WEBHOOK] - EVENT: ${event.type}`);
+    console.log(`[STRIPE WEBHOOKS] - EVENT: ${event.type}`);
+
+    const { data: existingEvent } = await supabaseAdmin
+      .from("stripe_webhook_events")
+      .select("id")
+      .eq("stripe_id", event.id)
+      .maybeSingle()
+      .throwOnError();
+
+    if (existingEvent) {
+      console.log(`[STRIPE WEBHOOKS] - Evento ${event.id} já processado anteriormente, ignorando.`);
+      return res.status(200).json({ received: true });
+    }
 
     switch (event.type) {
-      case "customer.subscription.updated":
+      case "invoice.paid":
         {
-          const subscriptionWebhook = event.data.object as Stripe.Subscription;
+          const invoiceWebhook = event.data.object as Stripe.Invoice;
 
-          const { data: subscriptionSb } = await supabaseAdmin
-            .from("stripe_subscriptions")
-            .select("*")
-            .eq("stripe_id", subscriptionWebhook.id)
-            .maybeSingle()
-            .throwOnError();
+          if (invoiceWebhook.amount_paid === 0) break;
 
-          // If the customer is upgrading for the first time
-          if (!subscriptionSb && subscriptionWebhook.status == "active") {
-            console.log("[STRIPE WEBHOOK] - CASE: customer is upgrading for the first time");
-            await handleSubscribingForTheFirstTime(subscriptionWebhook);
+          // If the client is upgrading for the first time
+          if (invoiceWebhook.billing_reason === "subscription_create") {
+            stripeWebhookHandles.upgradingFirstTime(invoiceWebhook);
+          }
+
+          // If the customer is upgrading their existing subcription
+          if (invoiceWebhook.metadata?.type === "subscription_plan_upgrade") {
+            stripeWebhookHandles.upgradingPlan(invoiceWebhook);
           }
         }
-
-        // If the customer is upgrading their existing subcription
 
         // If the customer is downgrading their existing subcription
 
@@ -80,6 +81,14 @@ export async function stripeWebhookController(req: Request, res: Response) {
       default:
         console.log(`Evento ignorado: ${event.type}`);
     }
+
+    await supabaseAdmin
+      .from("stripe_webhook_events")
+      .insert({
+        stripe_id: event.id,
+        data: event,
+      })
+      .throwOnError();
 
     return res.status(200).json({ received: true });
   } catch (error) {
