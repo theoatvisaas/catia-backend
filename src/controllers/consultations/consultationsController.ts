@@ -50,9 +50,9 @@ export async function consultationsGetController(req: Request, res: Response) {
     try {
         const { data, error } = await sb
             .from("consultations")
-            .select("patient_name, guardian_name")
+            .select("id, patient_name, guardian_name")
             .eq("id", id)
-            .maybeSingle(); // <- não explode se não achar
+            .maybeSingle();
 
         console.log("SUPABASE GET consultations:", { id, hasData: !!data, error });
 
@@ -121,7 +121,7 @@ export async function consultationsUpdateController(req: Request, res: Response)
             .from("consultations")
             .update(payload)
             .eq("id", id)
-            .select("patient_name, guardian_name")
+            .select("id, patient_name, guardian_name")
             .single()
             .throwOnError();
 
