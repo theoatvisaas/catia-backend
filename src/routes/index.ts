@@ -4,6 +4,7 @@ import { clientRoutes } from "./client.routes";
 import { plansRoutes } from "./plans.routes";
 import { paymentsRoutes } from "./payment.routes";
 import { documentsRoutes } from "./documents.routes";
+import { consultationsRoutes } from "./consultations.routes";
 
 export const routes = Router();
 
@@ -12,3 +13,4 @@ routes.use("/client", clientRoutes);
 routes.use("/plans", plansRoutes);
 routes.use("/payments", paymentsRoutes);
 routes.use("/documents", documentsRoutes);
+routes.use("/consultations", consultationsRoutes);
