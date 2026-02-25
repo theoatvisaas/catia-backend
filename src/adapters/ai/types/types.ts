@@ -1,5 +1,5 @@
 export type AiProvider = "openai" | "deepseek" | "gemini" | "anthropic";
-export type AiModel = "gpt-4o-mini" | "deepseek" | "gemini-pro-1_5" | "claude"
+export type AiModel = string;
 
 export type GenerateTextInput = {
     provider: AiProvider;

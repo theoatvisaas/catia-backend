@@ -13,6 +13,9 @@ export function createGeminiClient(): AiClient {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    generationConfig: {
+                        maxOutputTokens: 4096,
+                    },
                     contents: [
                         {
                             role: "user",

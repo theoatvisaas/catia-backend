@@ -16,7 +16,7 @@ export function createAnthropicClient(): AiClient {
                 },
                 body: JSON.stringify({
                     model: model,
-                    max_tokens: 1024,
+                    max_tokens: 4096,
                     messages: [
                         {
                             role: "user",

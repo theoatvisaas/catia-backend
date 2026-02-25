@@ -14,6 +14,7 @@ export function createDeepseekClient(): AiClient {
                 },
                 body: JSON.stringify({
                     model: model,
+                    max_tokens: 4096,
                     messages: [
                         { role: "system", content: "Você é um assistente útil." },
                         { role: "user", content: `${prompt}\n\n${transcription}` },

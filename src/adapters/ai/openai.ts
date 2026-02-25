@@ -16,6 +16,7 @@ export function createOpenAiClient(): AiClient {
                 },
                 body: JSON.stringify({
                     model: model,
+                    max_output_tokens: 4096,
                     input: [
                         {
                             role: "user",
