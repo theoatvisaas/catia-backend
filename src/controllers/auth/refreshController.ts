@@ -17,7 +17,6 @@ export async function refreshController(req: Request, res: Response) {
   const { data, error } = await supabaseAdmin.auth.refreshSession({ refresh_token });
 
   if (error || !data.session) {
-    console.log("SUPABASE refreshSession ERROR:", error);
     return res.status(401).json({
       message: "Refresh falhou",
       supabase: {

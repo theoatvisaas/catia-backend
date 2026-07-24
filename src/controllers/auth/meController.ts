@@ -8,7 +8,6 @@ export async function meController(req: Request, res: Response) {
         return res.status(401).json({ message: "Não autenticado" });
     }
 
-    // Buscar usuário no Supabase Auth
     const { data: sbUser, error: sbError } =
         await supabaseAdmin.auth.admin.getUserById(userId);
 
@@ -25,7 +24,6 @@ export async function meController(req: Request, res: Response) {
 
     const user = sbUser.user;
 
-    // Buscar client vinculado
     const { data: client, error: clientError } = await supabaseAdmin
         .from("clients")
         .select("id, name, status, funnel_phase, stripe_customer_id")

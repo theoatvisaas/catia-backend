@@ -18,14 +18,6 @@ const bodySchema = z.object({
 });
 
 export async function signupController(req: Request, res: Response) {
-  console.log("[SIGN UP] - STARTED");
-  console.log("signup hit", {
-    method: req.method,
-    url: req.originalUrl,
-    headers: req.headers,
-    body: req.body,
-  });
-
   const parsed = bodySchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: "Dados Inválidos" });
@@ -33,15 +25,12 @@ export async function signupController(req: Request, res: Response) {
 
   const { name, email, password } = parsed.data;
 
-  console.log("EMAIL RAW:", JSON.stringify(email), email.length);
-
   let { data, error } = await supabaseAdmin.auth.signUp({
     email,
     password,
   });
 
   if (error || !data.user) {
-    console.log("SUPABASE signUp ERROR:", error);
     return res.status(400).json({
       message: error?.message ?? "Não foi possível criar usuário",
       supabase: {
@@ -81,8 +70,6 @@ export async function signupController(req: Request, res: Response) {
     .throwOnError();
 
   const session = data.session!;
-
-  console.log("[SIGN UP] - FINISHED");
 
   return res.status(201).json({
     access_token: session.access_token,

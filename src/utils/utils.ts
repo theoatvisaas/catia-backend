@@ -12,6 +12,5 @@ export function toISO(unixSec: number | null): string | null {
 export function stripeAmountToDecimal(amountCents: number | null | undefined): number | null {
   if (amountCents == null || isNaN(amountCents)) return null;
 
-  // Divide por 100 e mantém a precisão desejada
   return parseFloat((amountCents / 100).toFixed(2));
 }

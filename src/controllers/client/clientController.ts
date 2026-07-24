@@ -1,4 +1,3 @@
-// src/controllers/client/clientController.ts
 import { Request, Response } from "express";
 import { z } from "zod";
 import { getAuthContext } from "../../utils/auth";
@@ -45,9 +44,7 @@ const updateAllowedSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: "Nada para atualizar" });
 
-// GET /client
 export async function getClientByIdController(req: Request, res: Response) {
-  console.log("[GET CLIENT] - STARTED");
   const auth = await getAuthContext(req);
 
   const { sb, userId } = auth;
@@ -69,11 +66,9 @@ export async function getClientByIdController(req: Request, res: Response) {
     return res.status(404).json({ message: "Cliente não encontrado" });
   }
 
-  console.log("[GET CLIENT] - FINISHED");
   return res.status(200).json({ client: data });
 }
 
-// PUT /client/:id
 export async function updateClientByIdController(req: Request, res: Response) {
   const parsedParams = idParamSchema.safeParse(req.params);
   if (!parsedParams.success) {
