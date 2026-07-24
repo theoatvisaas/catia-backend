@@ -24,7 +24,6 @@ export async function loginController(req: Request, res: Response) {
   });
 
   if (error || !data.session) {
-    console.log("SUPABASE signInWithPassword ERROR:", error);
     return res.status(401).json({
       message: "Login falhou",
       supabase: {

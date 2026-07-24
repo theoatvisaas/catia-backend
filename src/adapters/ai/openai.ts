@@ -1,5 +1,3 @@
-// src/adapters/ai/openai.ts
-
 import { AiClient } from "./types/types";
 
 export function createOpenAiClient(): AiClient {

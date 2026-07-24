@@ -49,8 +49,6 @@ const updateBodySchema = z.object({
 
 
 export async function documentsCreateController(req: Request, res: Response) {
-    console.log("[GENERATE DOCUMENT AI] - STARTED");
-
     const parsedBody = generateBodySchema.safeParse(req.body);
     if (!parsedBody.success) {
         return res
@@ -89,7 +87,6 @@ export async function documentsCreateController(req: Request, res: Response) {
             model: dataType.agent_model,
         });
     } catch (error: any) {
-        console.log("AI GENERATE ERROR:", error);
         return res.status(502).json({
             message: "Erro ao gerar texto com IA",
             provider: dataType.agent_services,
@@ -116,10 +113,8 @@ export async function documentsCreateController(req: Request, res: Response) {
 
         if (!data) return res.status(400).json({ message: "Não foi possível criar documento" });
 
-        console.log("[GENERATE DOCUMENT AI] - FINISHED");
         return res.status(201).json({ document: data });
     } catch (error: any) {
-        console.log("SUPABASE documents UPSERT ERROR:", error);
         return res.status(500).json({
             message: "Erro ao salvar documento",
             supabase: {
@@ -132,8 +127,6 @@ export async function documentsCreateController(req: Request, res: Response) {
 }
 
 export async function documentsUploadController(req: Request, res: Response) {
-    console.log("[UPLOAD DOCUMENT] - STARTED");
-
     const parsedBody = uploadBodySchema.safeParse(req.body);
     if (!parsedBody.success) {
         return res
@@ -160,10 +153,8 @@ export async function documentsUploadController(req: Request, res: Response) {
 
         if (!data) return res.status(400).json({ message: "Não foi possível criar documento" });
 
-        console.log("[UPLOAD DOCUMENT] - FINISHED");
         return res.status(201).json({ document: data });
     } catch (error: any) {
-        console.log("SUPABASE documents INSERT ERROR:", error);
         return res.status(500).json({
             message: "Erro ao salvar documento",
             supabase: {
@@ -177,8 +168,6 @@ export async function documentsUploadController(req: Request, res: Response) {
 }
 
 export async function documentsGetAllController(req: Request, res: Response) {
-    console.log("[GET ALL DOCUMENTS] - STARTED");
-
     const auth = await getAuthContext(req);
     const { sb } = auth;
 
@@ -188,10 +177,8 @@ export async function documentsGetAllController(req: Request, res: Response) {
             .select("id, title, text, type_id")
             .throwOnError();
 
-        console.log("[GET ALL DOCUMENTS] - FINISHED");
         return res.status(200).json({ documents: data ?? [] });
     } catch (error: any) {
-        console.log("SUPABASE documents SELECT ALL ERROR:", error);
         return res.status(500).json({
             message: "Erro ao buscar documentos",
             supabase: {
@@ -205,8 +192,6 @@ export async function documentsGetAllController(req: Request, res: Response) {
 }
 
 export async function documentsGetController(req: Request, res: Response) {
-    console.log("[GET DOCUMENT] - STARTED");
-
     const parsedParams = idParamSchema.safeParse(req.params);
     if (!parsedParams.success) {
         return res
@@ -231,10 +216,8 @@ export async function documentsGetController(req: Request, res: Response) {
             return res.status(404).json({ message: "Documento não encontrado" });
         }
 
-        console.log("[GET DOCUMENT] - FINISHED");
         return res.status(200).json({ document: data });
     } catch (error: any) {
-        console.log("SUPABASE documents SELECT ERROR:", error);
         return res.status(500).json({
             message: "Erro ao buscar documento",
             supabase: {
@@ -249,8 +232,6 @@ export async function documentsGetController(req: Request, res: Response) {
 }
 
 export async function documentsUpdateController(req: Request, res: Response) {
-    console.log("[UPDATE DOCUMENT] - STARTED");
-
     const parsedParams = idParamSchema.safeParse(req.params);
     if (!parsedParams.success) {
         return res.status(400).json({ message: "Dados Inválidos", issues: parsedParams.error.issues });
@@ -282,10 +263,8 @@ export async function documentsUpdateController(req: Request, res: Response) {
 
         if (!data) return res.status(404).json({ message: "Documento não encontrado" });
 
-        console.log("[UPDATE DOCUMENT] - FINISHED");
         return res.status(200).json({ document: data });
     } catch (error: any) {
-        console.log("SUPABASE documents UPDATE ERROR:", error);
         return res.status(500).json({
             message: "Erro ao atualizar documento",
             supabase: {
@@ -299,8 +278,6 @@ export async function documentsUpdateController(req: Request, res: Response) {
 }
 
 export async function documentsGetByConsultationIdController(req: Request, res: Response) {
-    console.log("[GET DOCUMENTS BY CONSULTATION_ID] - STARTED");
-
     const parsedParams = idParamSchema.safeParse(req.params);
     if (!parsedParams.success) {
         return res
@@ -320,10 +297,8 @@ export async function documentsGetByConsultationIdController(req: Request, res: 
             .eq("consultation_id", id)
             .throwOnError();
 
-        console.log("[GET DOCUMENTS BY CONSULTATION_ID] - FINISHED");
         return res.status(200).json({ documents: data ?? [] });
     } catch (error: any) {
-        console.log("SUPABASE documents SELECT BY CONSULTATION_ID ERROR:", error);
         return res.status(500).json({
             message: "Erro ao buscar documentos por consultation_id",
             supabase: {

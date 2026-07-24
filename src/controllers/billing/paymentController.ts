@@ -9,7 +9,6 @@ const createCheckoutBodySchema = z.object({
   plan_rank_tier: z.number().min(1),
 });
 
-// Create ephmeral key
 async function createEphKey(clientSb: any) {
   return await stripe.ephemeralKeys.create(
     { customer: clientSb.stripe_customer_id },
@@ -18,7 +17,6 @@ async function createEphKey(clientSb: any) {
 }
 
 export async function createCheckoutController(req: Request, res: Response) {
-  console.log("[CREATE CHECKOUT] - STARTED");
   try {
     const parsed = createCheckoutBodySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -37,13 +35,8 @@ export async function createCheckoutController(req: Request, res: Response) {
       .single()
       .throwOnError();
 
-    // If the client is upgrading for the first time
     if (!clientSb.subscription_id) {
-      console.log("[CREATE CHECKOUT] - CASE: UPGRADING FIRST TIME");
-
-      // Etapa 1: três chamadas independentes em paralelo
       const [subscription, ephKey] = await Promise.all([
-        // Create stripe subscription
         await stripe.subscriptions.create({
           customer: clientSb.stripe_customer_id,
           items: [{ price: chosenPlanPriceId }],
@@ -53,21 +46,18 @@ export async function createCheckoutController(req: Request, res: Response) {
             save_default_payment_method: "on_subscription",
           },
           expand: ["latest_invoice.payment_intent"],
-          // Metadata para o webhook saber o que fazer quando o pagamento for confirmado
           metadata: {
             type: "subscription_first_upgrade",
             new_plan_rank_tier: String(chosenPlanRankTier),
             client_id: clientSb.id,
           },
         }),
-        // Ephemeral key (independente de tudo)
         createEphKey(clientSb),
       ]);
 
       const invoice: any = subscription.latest_invoice;
       const piSecret = invoice?.payment_intent?.client_secret;
 
-      console.log("[CREATE CHECKOUT] - FINISHED");
       return res.json({
         customerId: clientSb.stripe_customer_id,
         clientId: clientSb.id,
@@ -77,7 +67,6 @@ export async function createCheckoutController(req: Request, res: Response) {
       });
     }
 
-    // If the client is updating their existing subscription
     if (clientSb.subscription_id) {
       const { data: subscriptionSb } = await sb
         .from("stripe_subscriptions")
@@ -89,11 +78,8 @@ export async function createCheckoutController(req: Request, res: Response) {
       const currentPlanRankTier = subscriptionSb.subscription_data.plan.metadata.rank_tier;
       const currentPlanPriceId = subscriptionSb.subscription_data.plan.id;
 
-      // If the customer has an active subscription
       if (subscriptionSb.status === "active") {
-        // If the customer is upgrading their plan
         if (chosenPlanRankTier > currentPlanRankTier) {
-          console.log("[CREATE CHECKOUT] - CASE: UPGRADING PLAN");
 
           const prorationDate = Math.floor(Date.now() / 1000);
 
@@ -109,9 +95,7 @@ export async function createCheckoutController(req: Request, res: Response) {
             proration_date: String(prorationDate),
           };
 
-          // Etapa 1: três chamadas independentes em paralelo
           const [invoicePreview, invoice, ephKey] = await Promise.all([
-            // Preview da proration
             stripe.invoices.createPreview({
               customer: clientSb.stripe_customer_id,
               subscription: subscriptionSb.stripe_id,
@@ -124,7 +108,6 @@ export async function createCheckoutController(req: Request, res: Response) {
                 ],
               },
             }),
-            // Invoice draft (não precisa do preview para ser criada)
             stripe.invoices.create({
               customer: clientSb.stripe_customer_id,
               collection_method: "send_invoice",
@@ -132,17 +115,14 @@ export async function createCheckoutController(req: Request, res: Response) {
               auto_advance: false,
               metadata: upgradeMetadata,
             }),
-            // Ephemeral key (independente de tudo)
             createEphKey(clientSb),
           ]);
 
-          // Filtrar linhas de proration
           const prorationLines = invoicePreview.lines.data.filter(
             (line) => (line as any).proration,
           );
           const prorationAmount = prorationLines.reduce((sum, line) => sum + line.amount, 0);
 
-          // Etapa 2: criar item vinculado à invoice (precisa de invoice.id + prorationAmount)
           await stripe.invoiceItems.create({
             customer: clientSb.stripe_customer_id,
             invoice: invoice.id,
@@ -152,24 +132,12 @@ export async function createCheckoutController(req: Request, res: Response) {
             metadata: upgradeMetadata,
           });
 
-          // Etapa 3: finalizar invoice → gera o PaymentIntent
           const finalizedInvoice: any = await stripe.invoices.finalizeInvoice(invoice.id, {
             expand: ["payment_intent"],
           });
 
-          if (
-            !finalizedInvoice.payment_intent ||
-            typeof finalizedInvoice.payment_intent === "string"
-          ) {
-            console.error(
-              "No payment_intent on finalized invoice, status:",
-              finalizedInvoice.status,
-            );
-          }
-
           const paymentIntent = finalizedInvoice.payment_intent as Stripe.PaymentIntent;
 
-          console.log("[CREATE CHECKOUT] - FINISHED (upgrade payment required)");
           return res.json({
             type: "upgrade_payment_required",
             customerId: clientSb.stripe_customer_id,
@@ -186,29 +154,20 @@ export async function createCheckoutController(req: Request, res: Response) {
             },
           });
         }
-        // If the customer is downgrading their plan
         if (chosenPlanRankTier < currentPlanRankTier) {
-          console.log("[CREATE CHECKOUT] - CASE: DOWNGRADING PLAN");
-          console.log("[CREATE CHECKOUT] - FINISHED");
           return res.status(400).json({
             message: "Not built yet.",
           });
         }
 
-        // If the customer selected the same plan
         if (chosenPlanRankTier == currentPlanRankTier) {
-          console.log("[CREATE CHECKOUT] - CASE: SAME PLAN SELECTED");
-          console.log("[CREATE CHECKOUT] - FINISHED");
           return res.status(400).json({
             message: "Esse já é o seu plano atual.",
           });
         }
       }
 
-      // If the customer has a past_due or unpaid subscription
       if (subscriptionSb.status === "unpaid" || subscriptionSb.status === "past_due") {
-        console.log("[CREATE CHECKOUT] - CASE: UNPAID OR PAST_DUE SUBSCRIPTION");
-        console.log("[CREATE CHECKOUT] - FINISHED");
 
         return res.status(400).json({
           message:
@@ -216,23 +175,18 @@ export async function createCheckoutController(req: Request, res: Response) {
         });
       }
 
-      // If the customer has a canceled subscription
       if (subscriptionSb.status === "canceled") {
-        console.log("[CREATE CHECKOUT] - CASE: CANCELED SUBSCRIPTION");
-        console.log("[CREATE CHECKOUT] - FINISHED");
 
         return res.status(400).json({
           message: "Not built yet.",
         });
       }
 
-      console.log("[CREATE CHECKOUT]: INVALID USE CASE REACHED");
       return res
         .status(500)
         .json({ message: "Por favor, entre em contato com o nosso time de suporte." });
     }
   } catch (err) {
-    console.log("ERROR: ", err);
     return res.status(500).json({ message: "Error", error: err });
   }
 }

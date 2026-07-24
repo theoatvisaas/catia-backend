@@ -32,8 +32,6 @@ const updateBodySchema = z
     );
 
 export async function consultationsGetController(req: Request, res: Response) {
-    console.log("[GET CONSULTATION] - STARTED");
-
     const parsedParams = idParamSchema.safeParse(req.params);
     if (!parsedParams.success) {
         return res.status(400).json({
@@ -54,8 +52,6 @@ export async function consultationsGetController(req: Request, res: Response) {
             .eq("id", id)
             .maybeSingle();
 
-        console.log("SUPABASE GET consultations:", { id, hasData: !!data, error });
-
         if (error) {
             return res.status(500).json({
                 message: "Erro ao buscar consulta",
@@ -72,10 +68,8 @@ export async function consultationsGetController(req: Request, res: Response) {
             return res.status(404).json({ message: "Consulta não encontrada" });
         }
 
-        console.log("[GET CONSULTATION] - FINISHED");
         return res.status(200).json({ consultation: data });
     } catch (err: any) {
-        console.log("CONSULTATIONS GET UNEXPECTED ERROR:", err);
         return res.status(500).json({
             message: "Erro ao buscar consulta",
             unexpected: {
@@ -88,8 +82,6 @@ export async function consultationsGetController(req: Request, res: Response) {
 
 
 export async function consultationsUpdateController(req: Request, res: Response) {
-    console.log("[UPDATE CONSULTATION] - STARTED");
-
     const parsedParams = idParamSchema.safeParse(req.params);
     if (!parsedParams.success) {
         return res.status(400).json({
@@ -128,10 +120,8 @@ export async function consultationsUpdateController(req: Request, res: Response)
 
         if (!data) return res.status(404).json({ message: "Consulta não encontrada" });
 
-        console.log("[UPDATE CONSULTATION] - FINISHED");
         return res.status(200).json({ consultation: data });
     } catch (error: any) {
-        console.log("SUPABASE consultations UPDATE ERROR:", error);
         return res.status(500).json({
             message: "Erro ao atualizar consulta",
             supabase: {
